@@ -193,8 +193,8 @@ classdef WavesurferModel < ws.Model
             if ~exist('doRunInDebugMode','var') || isempty(doRunInDebugMode) ,
                 doRunInDebugMode = false ;
             end
-            doRunInDebugMode = true ;
-            dbstop('if','error') ;
+%             doRunInDebugMode = true ;
+%             dbstop('if','error') ;
             
             self.IsITheOneTrueWavesurferModel_ = isITheOneTrueWavesurferModel ;
             
