@@ -193,8 +193,8 @@ classdef WavesurferModel < ws.Model
             if ~exist('doRunInDebugMode','var') || isempty(doRunInDebugMode) ,
                 doRunInDebugMode = false ;
             end
-            %doRunInDebugMode = true ;
-            %dbstop('if','error') ;
+            doRunInDebugMode = true ;
+            dbstop('if','error') ;
             
             self.IsITheOneTrueWavesurferModel_ = isITheOneTrueWavesurferModel ;
             
@@ -772,6 +772,12 @@ classdef WavesurferModel < ws.Model
             if ~isempty(ephys)
                 ephys.didSetAnalogChannelUnitsOrScales();
             end            
+            self.broadcast('UpdateChannels') ;
+        end
+        
+        function didSetAnalogInputDeviceName(self)
+            self.syncIsAIChannelTerminalOvercommitted_() ;
+            self.Display.didSetAnalogInputTerminalID_() ;
             self.broadcast('UpdateChannels') ;
         end
         
@@ -3256,6 +3262,7 @@ classdef WavesurferModel < ws.Model
             looperProtocol.AIChannelNames = self.Acquisition.AnalogChannelNames ;
             looperProtocol.AIChannelScales = self.Acquisition.AnalogChannelScales ;
             looperProtocol.IsAIChannelActive = self.Acquisition.IsAnalogChannelActive ;
+            looperProtocol.AIDeviceNames = self.Acquisition.AnalogDeviceNames ;
             looperProtocol.AITerminalIDs = self.Acquisition.AnalogTerminalIDs ;
             
             looperProtocol.DIChannelNames = self.Acquisition.DigitalChannelNames ;
@@ -3475,11 +3482,11 @@ classdef WavesurferModel < ws.Model
             
             % For AI terminals
             aiTerminalIDForEachChannel = self.Acquisition.AnalogTerminalIDs ;
-            nOccurancesOfAITerminal = ws.nOccurancesOfID(aiTerminalIDForEachChannel) ;
-            aiTerminalIDsOnDevice = self.AITerminalIDsOnDevice ;
+            nOccurancesOfAITerminal = ws.nOccurancesOfDeviceNameAndID(self.Acquisition.AnalogDeviceNames,aiTerminalIDForEachChannel) ;
+%             aiTerminalIDsOnDevice = self.AITerminalIDsOnDevice ; % TODO : for each device????
             %nAITerminalsOnDevice = self.NAITerminals ;            
             %self.IsAIChannelTerminalOvercommitted_ = (nOccurancesOfAITerminal>1) | (aiTerminalIDForEachChannel>=nAITerminalsOnDevice) ;            
-            self.IsAIChannelTerminalOvercommitted_ = (nOccurancesOfAITerminal>1) | ~ismember(aiTerminalIDForEachChannel,aiTerminalIDsOnDevice) ;
+            self.IsAIChannelTerminalOvercommitted_ = (nOccurancesOfAITerminal>1); % | ~ismember(aiTerminalIDForEachChannel,aiTerminalIDsOnDevice) ;
         end
         
         function syncIsAOChannelTerminalOvercommitted_(self)            

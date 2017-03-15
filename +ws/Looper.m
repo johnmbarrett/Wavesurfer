@@ -25,6 +25,7 @@ classdef Looper < handle
         DOChannelNames_ = cell(1,0)
         AcquisitionSampleRate_ = []
         AIChannelNames_ = cell(1,0)
+        AIDeviceNames_ = cell(1,0)
         AIChannelScales_ = zeros(1,0)
         IsAIChannelActive_ = false(1,0)
         AITerminalIDs_ = zeros(1,0)
@@ -66,7 +67,7 @@ classdef Looper < handle
         IsInUntimedDOTaskForEachUntimedDOChannel_ = false(1,0)  
         % Tasks
         UntimedDigitalOutputTask_ = []
-        TimedAnalogInputTask_ = []
+        TimedAnalogInputTask_ = {}
         TimedDigitalInputTask_ = []        
     end
     
@@ -247,6 +248,7 @@ classdef Looper < handle
             % This is called via (rep-req) RPC, so must return exactly one value.
 
             % Prepare for the run
+            
             result = self.prepareForRun_(currentFrontendPath, ...
                                          currentFrontendPwd, ...
                                          looperProtocol, ...
@@ -496,7 +498,7 @@ classdef Looper < handle
         end
 
         function releaseTimedHardwareResources_(self)
-            self.TimedAnalogInputTask_=[];            
+            self.TimedAnalogInputTask_={};            
             self.TimedDigitalInputTask_=[];            
         end
         
@@ -639,19 +641,24 @@ classdef Looper < handle
         
         function startingRunAcquisition_(self)
             % Make the NI daq task, if don't have it already
+            
             self.acquireTimedHardwareResources_() ;
 
             % Set up the task triggering
             keystoneTask = self.AcquisitionKeystoneTaskCache_ ;
-            acquisitionTriggerPFIID = self.AcquisitionTriggerPFIID_
+            
             if isequal(keystoneTask,'ai') ,
-                self.TimedAnalogInputTask_.TriggerTerminalName = sprintf('PFI%d',self.AcquisitionTriggerPFIID_) ;
-                self.TimedAnalogInputTask_.TriggerEdge = self.AcquisitionTriggerEdge_ ;
+                for ii = 1:numel(self.TimedAnalogInputTask_)
+                    self.TimedAnalogInputTask_{ii}.TriggerTerminalName = sprintf('PFI%d',self.AcquisitionTriggerPFIID_) ;
+                    self.TimedAnalogInputTask_{ii}.TriggerEdge = self.AcquisitionTriggerEdge_ ;
+                end
                 self.TimedDigitalInputTask_.TriggerTerminalName = 'ai/StartTrigger' ;
                 self.TimedDigitalInputTask_.TriggerEdge = 'rising' ;
             elseif isequal(keystoneTask,'di') ,
-                self.TimedAnalogInputTask_.TriggerTerminalName = 'di/StartTrigger' ;
-                self.TimedAnalogInputTask_.TriggerEdge = 'rising' ;                
+                for ii = 1:numel(self.TimedAnalogInputTask_)
+                    self.TimedAnalogInputTask_{ii}.TriggerTerminalName = 'di/StartTrigger' ;
+                    self.TimedAnalogInputTask_{ii}.TriggerEdge = 'rising' ;                
+                end
                 self.TimedDigitalInputTask_.TriggerTerminalName = sprintf('PFI%d',self.AcquisitionTriggerPFIID_) ;
                 self.TimedDigitalInputTask_.TriggerEdge = self.AcquisitionTriggerEdge_ ;
             else
@@ -661,7 +668,9 @@ classdef Looper < handle
             end
             
             % Set for finite-duration vs. continous acquisition
-            self.TimedAnalogInputTask_.AcquisitionDuration = self.SweepDuration_ ;
+            for ii = 1:numel(self.TimedAnalogInputTask_)
+                self.TimedAnalogInputTask_{ii}.AcquisitionDuration = self.SweepDuration_ ;
+            end
             self.TimedDigitalInputTask_.AcquisitionDuration = self.SweepDuration_ ;
             
             % Dimension the cache that will hold acquired data in main
@@ -690,7 +699,9 @@ classdef Looper < handle
             self.IsAtLeastOneActiveDIChannelCached_ = (nActiveDIChannels>0) ;
             
             % Arm the AI and DI tasks
-            self.TimedAnalogInputTask_.arm();
+            for ii = 1:numel(self.TimedAnalogInputTask_)
+                self.TimedAnalogInputTask_{ii}.arm();
+            end
             self.TimedDigitalInputTask_.arm();
         end  % function        
         
@@ -747,7 +758,9 @@ classdef Looper < handle
             self.TimeOfLastPollingTimerFire_ = 0 ;  % not really true, but works
             self.NScansReadThisSweep_ = 0 ;
             self.TimedDigitalInputTask_.start();
-            self.TimedAnalogInputTask_.start();
+            for ii = 1:numel(self.TimedAnalogInputTask_)
+                self.TimedAnalogInputTask_{ii}.start();
+            end
         end  % function
         
         function completeTheOngoingSweep_(self)
@@ -770,7 +783,9 @@ classdef Looper < handle
             % user.
             
             % Stop the timed input tasks
-            self.TimedAnalogInputTask_.stop() ;
+            for ii = 1:numel(self.TimedAnalogInputTask_)
+                self.TimedAnalogInputTask_{ii}.stop() ;
+            end
             self.TimedDigitalInputTask_.stop() ;
             self.IsArmedOrAcquiring_ = false ;
 
@@ -802,10 +817,12 @@ classdef Looper < handle
         
         function completingOrStoppingOrAbortingRun_(self)
             if ~isempty(self.TimedAnalogInputTask_) ,
-                if isvalid(self.TimedAnalogInputTask_) ,
-                    self.TimedAnalogInputTask_.disarm();
-                else
-                    self.TimedAnalogInputTask_ = [] ;
+                for ii = 1:numel(self.TimedAnalogInputTask_)
+                    if isvalid(self.TimedAnalogInputTask_{ii}) ,
+                        self.TimedAnalogInputTask_{ii}.disarm();
+                    else
+                        self.TimedAnalogInputTask_(ii) = [];
+                    end
                 end
             end
             if ~isempty(self.TimedDigitalInputTask_) ,
@@ -880,6 +897,7 @@ classdef Looper < handle
             self.AcquisitionSampleRate_ = looperProtocol.AcquisitionSampleRate ;
 
             self.AIChannelNames_ = looperProtocol.AIChannelNames ;
+            self.AIDeviceNames_ = looperProtocol.AIDeviceNames ;
             self.AIChannelScales_ = looperProtocol.AIChannelScales ;
             self.IsAIChannelActive_ = looperProtocol.IsAIChannelActive ;
             self.AITerminalIDs_ = looperProtocol.AITerminalIDs ;
@@ -926,17 +944,19 @@ classdef Looper < handle
                 isAIChannelActive = self.IsAIChannelActive_ ;
                 %activeAIChannelNames = self.AIChannelNames(isAIChannelActive) ;
                 %activeAnalogTerminalNames = self.AnalogTerminalNames(isAIChannelActive) ;
-                aiDeviceNames = repmat({self.DeviceName_}, size(isAIChannelActive)) ;
+                aiDeviceNames = self.AIDeviceNames_(isAIChannelActive) ;
                 activeAIDeviceNames = aiDeviceNames(isAIChannelActive) ;
                 activeAITerminalIDs = self.AITerminalIDs_(isAIChannelActive) ;
-                self.TimedAnalogInputTask_ = ...
+                
+                self.TimedAnalogInputTask_ = cellfun(@(deviceName) ...
                     ws.InputTask(self, ...
                                  'analog', ...
-                                 'WaveSurfer Analog Acquisition Task', ...
-                                 activeAIDeviceNames, ...
-                                 activeAITerminalIDs, ...
+                                 sprintf('WaveSurfer Analog Acquisition Task for %s', deviceName), ...
+                                 activeAIDeviceNames(strcmpi(deviceName,activeAIDeviceNames)), ...
+                                 activeAITerminalIDs(strcmpi(deviceName,activeAIDeviceNames)), ...
                                  self.AcquisitionSampleRate_, ...
-                                 self.SweepDuration_) ;
+                                 self.SweepDuration_), ...
+                     unique(activeAIDeviceNames),'UniformOutput',false);
                 % Set other things in the Task object
                 %self.TimedAnalogInputTask_.DurationPerDataAvailableCallback = self.Duration ;
                 %self.TimedAnalogInputTask_.SampleRate = self.SampleRate;                
@@ -980,7 +1000,7 @@ classdef Looper < handle
             if isempty(self.TimedAnalogInputTask_) ,
                 result = [] ;
             else                
-                result = self.TimedAnalogInputTask_.ScalingCoefficients ;
+                result = cell2mat(cellfun(@(task) task.ScalingCoefficients,self.TimedAnalogInputTask_,'UniformOutput',false));
             end
         end        
         
@@ -1000,7 +1020,7 @@ classdef Looper < handle
                     % 10-20 ms.
                     areTasksDone = false;
                 else                    
-                    areTasksDone = ( self.TimedAnalogInputTask_.isTaskDone() && self.TimedDigitalInputTask_.isTaskDone() ) ;
+                    areTasksDone = ( all(cellfun(@(task) task.isTaskDone(),self.TimedAnalogInputTask_)) && self.TimedDigitalInputTask_.isTaskDone() ) ;
                 end
 %                 if areTasksDone ,
 %                     fprintf('Acquisition tasks are done.\n')
@@ -1023,7 +1043,9 @@ classdef Looper < handle
                 if areTasksDone ,
                     % Stop tasks, set flag to reflect that we're no longer
                     % armed nor acquiring
-                    self.TimedAnalogInputTask_.stop();
+                    for ii = 1:numel(self.TimedAnalogInputTask_)
+                        self.TimedAnalogInputTask_{ii}.stop();
+                    end
                     self.TimedDigitalInputTask_.stop();
                     self.IsArmedOrAcquiring_ = false ;
                 end
@@ -1045,8 +1067,17 @@ classdef Looper < handle
             % both analog and digital tasks are for-real
             if self.IsAtLeastOneActiveAIChannelCached_ ,
                 [rawAnalogData, timeSinceRunStartAtStartOfData] = ...
-                    self.TimedAnalogInputTask_.readData([], timeSinceSweepStart, fromRunStartTicId);
-                nScans = size(rawAnalogData,1) ;
+                    self.TimedAnalogInputTask_{1}.readData([], timeSinceSweepStart, fromRunStartTicId);
+                
+                nScans = size(rawAnalogData,1);
+                
+                for ii = 2:numel(self.TimedAnalogInputTask_)
+                    rawAnalogData2 = self.TimedAnalogInputTask_{ii}.readData(nScans, timeSinceSweepStart, fromRunStartTicId);
+                    rawAnalogData(:,end+(1:size(rawAnalogData2,2))) = rawAnalogData2;
+                end
+                
+                disp(rawAnalogData);
+                
                 rawDigitalData = ...
                     self.TimedDigitalInputTask_.readData(nScans, timeSinceSweepStart, fromRunStartTicId);
             elseif self.IsAtLeastOneActiveDIChannelCached_ ,

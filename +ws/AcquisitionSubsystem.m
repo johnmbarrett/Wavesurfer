@@ -54,7 +54,8 @@ classdef AcquisitionSubsystem < ws.Subsystem
     properties (Access = protected) 
         SampleRate_ = 20000  % Hz
         AnalogChannelNames_ = cell(1,0)  % the (user) channel name for each analog channel
-        DigitalChannelNames_ = cell(1,0)  % the (user) channel name for each digital channel        
+        DigitalChannelNames_ = cell(1,0)  % the (user) channel name for each digital channel 
+        AnalogDeviceNames_ = cell(1,0); % Store for the device ID of the NI board for each channel, a cell array of strings
         AnalogTerminalIDs_ = zeros(1,0)  % Store for the channel IDs, zero-based AI channel IDs for all available channels
         DigitalTerminalIDs_ = zeros(1,0)  % Store for the digital channel IDs, zero-based port0 channel IDs for all available channels
         AnalogChannelScales_ = zeros(1,0)  % Store for the current AnalogChannelScales values, but values may be "masked" by ElectrodeManager
@@ -380,6 +381,13 @@ classdef AcquisitionSubsystem < ws.Subsystem
             self.Parent.didSetDigitalInputChannelName(didSucceed,oldValue,newValue);
         end
         
+        function setSingleAnalogDeviceName(self, i, newValue)
+            if 1<=i && i<=self.NAnalogChannels && ws.isString(newValue) && ~isempty(newValue) && ismember(newValue,self.Parent.AllDeviceNames) ,
+                self.AnalogDeviceNames_{i} = newValue ;
+            end
+            self.Parent.didSetAnalogInputDeviceName();
+        end
+        
         function setSingleAnalogTerminalID(self, i, newValue)
             if 1<=i && i<=self.NAnalogChannels && isnumeric(newValue) && isscalar(newValue) && isfinite(newValue) ,
                 newValueAsDouble = double(newValue) ;
@@ -447,9 +455,9 @@ classdef AcquisitionSubsystem < ws.Subsystem
         end  % function
         
         function out = get.AnalogDeviceNames(self)
-            %out = self.AnalogDeviceNames_ ;
-            deviceName = self.Parent.DeviceName ;
-            out = repmat({deviceName}, size(self.AnalogChannelNames)) ;             
+            out = self.AnalogDeviceNames_ ;
+%             deviceName = self.Parent.DeviceName ;
+%             out = repmat({deviceName}, size(self.AnalogChannelNames)) ;             
         end  % function
         
         function out = get.DigitalDeviceNames(self)
@@ -779,16 +787,16 @@ classdef AcquisitionSubsystem < ws.Subsystem
         end        
         
         function newChannelName = addAnalogChannel(self)
-            %deviceName = self.Parent.DeviceName ;
+            deviceName = self.Parent.DeviceName ;
             
-            %newChannelDeviceName = deviceName ;
+            newChannelDeviceName = deviceName ;
             newTerminalID = ws.fif(isempty(self.AnalogTerminalIDs), ...
                                           0, ...
                                           max(self.AnalogTerminalIDs)+1) ;
             newChannelPhysicalName = sprintf('AI%d',newTerminalID) ;
             newChannelName = newChannelPhysicalName ;
             
-            %self.AnalogDeviceNames_ = [self.AnalogDeviceNames_ {newChannelDeviceName} ] ;
+            self.AnalogDeviceNames_ = [self.AnalogDeviceNames_ {newChannelDeviceName} ] ;
             self.AnalogTerminalIDs_ = [self.AnalogTerminalIDs_ newTerminalID] ;
             %self.AnalogTerminalNames_ =  [self.AnalogTerminalNames_ {newChannelPhysicalName}] ;
             self.AnalogChannelNames_ = [self.AnalogChannelNames_ {newChannelName}] ;
@@ -812,7 +820,7 @@ classdef AcquisitionSubsystem < ws.Subsystem
                 % Have to do this because we want all these properties to
                 % be 1x0 when empty, and the default-case code leaves them
                 % 0x0.  I.e. we want them to always be row vectors.
-                %self.AnalogDeviceNames_ = cell(1,0) ;
+                self.AnalogDeviceNames_ = cell(1,0) ;
                 self.AnalogTerminalIDs_ = zeros(1,0) ;
                 self.AnalogChannelNames_ = cell(1,0) ;
                 self.AnalogChannelScales_ = zeros(1,0) ;
@@ -821,7 +829,7 @@ classdef AcquisitionSubsystem < ws.Subsystem
                 self.IsAnalogChannelMarkedForDeletion_ = false(1,0) ;
             else
                 isKeeper = ~isToBeDeleted ;
-                %self.AnalogDeviceNames_ = self.AnalogDeviceNames_(isKeeper) ;
+                self.AnalogDeviceNames_ = self.AnalogDeviceNames_(isKeeper) ;
                 self.AnalogTerminalIDs_ = self.AnalogTerminalIDs_(isKeeper) ;
                 self.AnalogChannelNames_ = self.AnalogChannelNames_(isKeeper) ;
                 self.AnalogChannelScales_ = self.AnalogChannelScales_(isKeeper) ;
@@ -846,7 +854,7 @@ classdef AcquisitionSubsystem < ws.Subsystem
             % the length of AnalogChannelNames_ is the "true" number of AI
             % channels
             nAIChannels = length(self.AnalogChannelNames_) ;
-            %self.AnalogDeviceNames_ = ws.sanitizeRowVectorLength(self.AnalogDeviceNames_, nAIChannels, {''}) ;
+            self.AnalogDeviceNames_ = ws.sanitizeRowVectorLength(self.AnalogDeviceNames_, nAIChannels, {''}) ;
             self.AnalogTerminalIDs_ = ws.sanitizeRowVectorLength(self.AnalogTerminalIDs_, nAIChannels, 0) ;
             self.AnalogChannelScales_ = ws.sanitizeRowVectorLength(self.AnalogChannelScales_, nAIChannels, 1) ;
             self.AnalogChannelUnits_ = ws.sanitizeRowVectorLength(self.AnalogChannelUnits_, nAIChannels, {'V'}) ;
