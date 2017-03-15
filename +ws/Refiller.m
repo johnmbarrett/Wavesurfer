@@ -16,6 +16,7 @@ classdef Refiller < handle
         IsStimulationTriggerIdenticalToAcquistionTrigger_ = []
         
         AOChannelNames_ = cell(1,0)
+        AODeviceNames_ = cell(1,0)
         AOChannelScales_ = zeros(1,0)
         IsAOChannelActive_ = false(1,0)
         AOTerminalIDs_ = zeros(1,0)
@@ -42,7 +43,7 @@ classdef Refiller < handle
         NEpisodesPerRun_
         NEpisodesCompletedSoFarThisRun_
         StimulationKeystoneTaskCache_
-        TheFiniteAnalogOutputTask_
+        TheFiniteAnalogOutputTasks_
         TheFiniteDigitalOutputTask_
         DidNotifyFrontendThatWeCompletedAllEpisodes_
     end
@@ -234,15 +235,17 @@ classdef Refiller < handle
             %
             
             % Disarm the tasks
-            if ~isempty(self.TheFiniteAnalogOutputTask_) ,
-                self.TheFiniteAnalogOutputTask_.disarm();
+            if ~isempty(self.TheFiniteAnalogOutputTasks_) ,
+                for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                    self.TheFiniteAnalogOutputTasks_{ii}.disarm();
+                end
             end
             if ~isempty(self.TheFiniteDigitalOutputTask_) ,
                 self.TheFiniteDigitalOutputTask_.disarm();
             end
             
             % Clear the output tasks
-            self.TheFiniteAnalogOutputTask_ = [] ;            
+            self.TheFiniteAnalogOutputTasks_ = {} ;            
             self.TheFiniteDigitalOutputTask_ = [] ;            
             
             %
@@ -400,7 +403,7 @@ classdef Refiller < handle
     
     methods (Access = protected)
         function releaseHardwareResources_(self)
-            self.TheFiniteAnalogOutputTask_ = [] ;            
+            self.TheFiniteAnalogOutputTasks_ = {} ;            
             %self.IsInTaskForEachAOChannel_ = [] ;
             self.TheFiniteDigitalOutputTask_ = [] ;            
             %self.IsInTaskForEachDOChannel_ = [] ;
@@ -600,11 +603,11 @@ classdef Refiller < handle
 %         function completeTheEpisodes_(self)
 %             fprintf('completeTheEpisodes()\n') ;
 % %             % Disarm the tasks
-% %             self.TheFiniteAnalogOutputTask_.disarm();
+% %             self.TheFiniteAnalogOutputTasks_.disarm();
 % %             self.TheFiniteDigitalOutputTask_.disarm();            
 % %             
 % %             % Clear the output tasks
-% %             self.TheFiniteAnalogOutputTask_ = [] ;            
+% %             self.TheFiniteAnalogOutputTasks_ = [] ;            
 % %             self.TheFiniteDigitalOutputTask_ = [] ;            
 %             
 %             
@@ -624,7 +627,7 @@ classdef Refiller < handle
             self.makeSureAllOutputsAreZero_() ;
             
             % Clear the tasks
-            self.TheFiniteAnalogOutputTask_ = [] ;            
+            self.TheFiniteAnalogOutputTasks_ = {} ;            
             self.TheFiniteDigitalOutputTask_ = [] ;            
 
             % Update our internal state
@@ -706,7 +709,9 @@ classdef Refiller < handle
                 self.TheFiniteDigitalOutputTask_.start() ; 
 
                 % Start the analog task (which will then wait for a trigger)
-                self.TheFiniteAnalogOutputTask_.start() ;                
+                for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                    self.TheFiniteAnalogOutputTasks_{ii}.start() ;                
+                end
             end
         end
         
@@ -720,7 +725,10 @@ classdef Refiller < handle
             % Notify the Stimulation subsystem
             if self.IsStimulationEnabled_ ,
                 if self.AreTasksStarted_ ,
-                    self.TheFiniteAnalogOutputTask_.stop() ;
+                    for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                        self.TheFiniteAnalogOutputTasks_{ii}.stop() ;
+                    end
+                        
                     self.TheFiniteDigitalOutputTask_.stop() ;                
                     self.AreTasksStarted_ = false ;
                 end
@@ -743,7 +751,10 @@ classdef Refiller < handle
             %fprintf('stopTheOngoingEpisode_()\n');
             if self.IsStimulationEnabled_ ,
                 if self.AreTasksStarted_ ,
-                    self.TheFiniteAnalogOutputTask_.stop() ;
+                    for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                        self.TheFiniteAnalogOutputTasks_{ii}.stop() ;
+                    end
+                    
                     self.TheFiniteDigitalOutputTask_.stop() ;
                     self.AreTasksStarted_ = false ;
                 end
@@ -757,7 +768,10 @@ classdef Refiller < handle
             %fprintf('abortTheOngoingEpisode_()\n');
             if self.IsStimulationEnabled_ ,
                 if self.AreTasksStarted_ ,
-                    self.TheFiniteAnalogOutputTask_.stop() ;
+                    for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                        self.TheFiniteAnalogOutputTasks_{ii}.stop() ;
+                    end
+                    
                     self.TheFiniteDigitalOutputTask_.stop() ;                
                     self.AreTasksStarted_ = false ;
                 end
@@ -775,8 +789,8 @@ classdef Refiller < handle
             if self.AreTasksStarted_ ,
                 % if isArmedOrStimulating_ is true, the tasks should be
                 % non-empty (this is an object invariant)
-                isAnalogTaskDone = self.TheFiniteAnalogOutputTask_.isDone() ;
-                if isAnalogTaskDone ,                    
+                isAnalogTaskDone = cellfun(@(task) task.isDone(),self.TheFiniteAnalogOutputTasks_) ;
+                if all(isAnalogTaskDone) ,                    
                     result = self.TheFiniteDigitalOutputTask_.isDone() ;
                 else
                     result = false ;
@@ -878,22 +892,37 @@ classdef Refiller < handle
             %self.SelectedOutputableCache_ = [];
 
             % Disarm the tasks
-            self.TheFiniteAnalogOutputTask_.disarm();
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.disarm();
+            end
+            
             self.TheFiniteDigitalOutputTask_.disarm();            
 
             % The tasks should already be stopped, but they might have
             % non-zero outputs.  So we fill the output buffers with a short
             % run of zeros, then start the task again.
-            self.TheFiniteAnalogOutputTask_.zeroChannelData();
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.zeroChannelData();
+            end
+            
             self.TheFiniteDigitalOutputTask_.zeroChannelData();            
 
-            self.TheFiniteAnalogOutputTask_.TriggerTerminalName = '' ;  % this will make it start w/o waiting for a trigger
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.TriggerTerminalName = '' ;  % this will make it start w/o waiting for a trigger
+            end
+            
             self.TheFiniteDigitalOutputTask_.TriggerTerminalName = '' ;  % this will make it start w/o waiting for a trigger
             
-            self.TheFiniteAnalogOutputTask_.arm();
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.arm();
+            end
+            
             self.TheFiniteDigitalOutputTask_.arm();            
             
-            self.TheFiniteAnalogOutputTask_.start();
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.start();
+            end
+            
             self.TheFiniteDigitalOutputTask_.start();            
 
             % Wait for the tasks to stop, but don't wait forever...
@@ -901,7 +930,7 @@ classdef Refiller < handle
             % outputs, but not to ever go into an infinite loop that brings
             % everything crashing to a halt.
             for i=1:100 ,
-                if self.TheFiniteAnalogOutputTask_.isDone() ,
+                if all(cellfun(@(task) task.isDone(),self.TheFiniteAnalogOutputTasks_)) ,
                     break
                 end
                 pause(0.01) ;  % This is OK since it's running in the refiller.
@@ -913,15 +942,21 @@ classdef Refiller < handle
                 pause(0.01) ;  % This is OK since it's running in the refiller.
             end
             
-            self.TheFiniteAnalogOutputTask_.stop();
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.stop();
+            end
+            
             self.TheFiniteDigitalOutputTask_.stop();            
             
             % Disarm the tasks (again)
-            self.TheFiniteAnalogOutputTask_.disarm();
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.disarm();
+            end
+            
             self.TheFiniteDigitalOutputTask_.disarm();                        
             
             % Clear the NI daq tasks
-            self.TheFiniteAnalogOutputTask_ = [] ;            
+            self.TheFiniteAnalogOutputTasks_ = {} ;            
             %self.IsInTaskForEachAOChannel_ = [] ;
             self.TheFiniteDigitalOutputTask_ = [] ;            
             %self.IsInTaskForEachDOChannel_ = [] ;
@@ -929,22 +964,37 @@ classdef Refiller < handle
         
         function makeSureAllOutputsAreZero_(self)
             % Disarm the tasks
-            self.TheFiniteAnalogOutputTask_.disarm();
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.disarm();
+            end
+            
             self.TheFiniteDigitalOutputTask_.disarm();            
 
             % The tasks should already be stopped, but they might have
             % non-zero outputs.  So we fill the output buffers with a short
             % run of zeros, then start the task again.
-            self.TheFiniteAnalogOutputTask_.zeroChannelData();
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.zeroChannelData();
+            end
+            
             self.TheFiniteDigitalOutputTask_.zeroChannelData();            
 
-            self.TheFiniteAnalogOutputTask_.TriggerTerminalName = '' ;  % this will make it start w/o waiting for a trigger
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.TriggerTerminalName = '' ;  % this will make it start w/o waiting for a trigger
+            end
+            
             self.TheFiniteDigitalOutputTask_.TriggerTerminalName = '' ;  % this will make it start w/o waiting for a trigger
             
-            self.TheFiniteAnalogOutputTask_.arm();
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.arm();
+            end
+            
             self.TheFiniteDigitalOutputTask_.arm();            
             
-            self.TheFiniteAnalogOutputTask_.start();
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.start();
+            end
+            
             self.TheFiniteDigitalOutputTask_.start();            
 
             % Wait for the tasks to stop, but don't wait forever...
@@ -952,7 +1002,7 @@ classdef Refiller < handle
             % outputs, but not to ever go into an infinite loop that brings
             % everything crashing to a halt.
             for i=1:100 ,
-                if self.TheFiniteAnalogOutputTask_.isDone() ,
+                if all(cellfun(@(task) task.isDone(), self.TheFiniteAnalogOutputTasks_)) ,
                     break
                 end
                 pause(0.01) ;  % This is OK since it's running in the refiller.
@@ -964,15 +1014,21 @@ classdef Refiller < handle
                 pause(0.01) ;  % This is OK since it's running in the refiller.
             end
             
-            self.TheFiniteAnalogOutputTask_.stop();
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.stop();
+            end
+            
             self.TheFiniteDigitalOutputTask_.stop();            
             
             % Disarm the tasks (again)
-            self.TheFiniteAnalogOutputTask_.disarm();
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.disarm();
+            end
+            
             self.TheFiniteDigitalOutputTask_.disarm();                        
             
 %             % Clear the NI daq tasks
-%             self.TheFiniteAnalogOutputTask_ = [] ;            
+%             self.TheFiniteAnalogOutputTasks_ = [] ;            
 %             %self.IsInTaskForEachAOChannel_ = [] ;
 %             self.TheFiniteDigitalOutputTask_ = [] ;            
 %             %self.IsInTaskForEachDOChannel_ = [] ;
@@ -984,15 +1040,19 @@ classdef Refiller < handle
             
             % Disarm the tasks (check that they exist first, since this
             % gets called in situations where something has gone wrong)
-            if ~isempty(self.TheFiniteAnalogOutputTask_) && isvalid(self.TheFiniteAnalogOutputTask_) ,
-                self.TheFiniteAnalogOutputTask_.disarm();
+            if ~isempty(self.TheFiniteAnalogOutputTasks_) 
+                for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                    if isvalid(self.TheFiniteAnalogOutputTasks_{ii}) ,
+                        self.TheFiniteAnalogOutputTasks_{ii}.disarm();
+                    end
+                end
             end
             if ~isempty(self.TheFiniteDigitalOutputTask_) && isvalid(self.TheFiniteDigitalOutputTask_) ,
                 self.TheFiniteDigitalOutputTask_.disarm();
             end
             
             % Clear the NI daq tasks
-            self.TheFiniteAnalogOutputTask_ = [] ;            
+            self.TheFiniteAnalogOutputTasks_ = {} ;            
             %self.IsInTaskForEachAOChannel_ = [] ;
             self.TheFiniteDigitalOutputTask_ = [] ;            
             %self.IsInTaskForEachDOChannel_ = [] ;
@@ -1022,12 +1082,12 @@ classdef Refiller < handle
 %             self.TheFiniteDigitalOutputTask_.start() ; 
 %             
 %             % Start the analog task (which will then wait for a trigger)
-%             self.TheFiniteAnalogOutputTask_.start() ;                
+%             self.TheFiniteAnalogOutputTasks_.start() ;                
 %         end  % function
         
 %         function completingEpisode_(self)
 %             if self.AreTasksStarted_ ,
-%                 self.TheFiniteAnalogOutputTask_.stop() ;
+%                 self.TheFiniteAnalogOutputTasks_.stop() ;
 %                 self.TheFiniteDigitalOutputTask_.stop() ;                
 %                 self.AreTasksStarted_ = false ;
 %             end
@@ -1035,7 +1095,7 @@ classdef Refiller < handle
 %         
 %         function stoppingEpisode_(self)
 %             if self.AreTasksStarted_ ,
-%                 self.TheFiniteAnalogOutputTask_.stop() ;
+%                 self.TheFiniteAnalogOutputTasks_.stop() ;
 %                 self.TheFiniteDigitalOutputTask_.stop() ;                
 %                 self.AreTasksStarted_ = false ;
 %             end
@@ -1043,7 +1103,7 @@ classdef Refiller < handle
 %                 
 %         function abortingEpisode_(self)
 %             if self.AreTasksStarted_ ,
-%                 self.TheFiniteAnalogOutputTask_.stop() ;
+%                 self.TheFiniteAnalogOutputTasks_.stop() ;
 %                 self.TheFiniteDigitalOutputTask_.stop() ;                
 %                 self.AreTasksStarted_ = false ;
 %             end
@@ -1106,53 +1166,57 @@ classdef Refiller < handle
         function [nScans, nChannelsWithStimulus] = setAnalogChannelData_(self, stimulusMapIndex, episodeIndexWithinSweep)
             % Get info about which analog channels are in the task
             %isInTaskForEachAnalogChannel = self.IsInTaskForEachAOChannel_ ;
-            isInTaskForEachAnalogChannel = self.TheFiniteAnalogOutputTask_.IsChannelInTask ;
-            nAnalogChannelsInTask = sum(isInTaskForEachAnalogChannel) ;
+            % TODO : is this the right way to implement this?
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                theFiniteAnalogOutputTasks_ = self.TheFiniteAnalogOutputTasks_{ii};
+                isInTaskForEachAnalogChannel = theFiniteAnalogOutputTasks_.IsChannelInTask ;
+                nAnalogChannelsInTask = sum(isInTaskForEachAnalogChannel) ;
 
-            % Calculate the signals
-            if isempty(stimulusMapIndex) ,
-                aoData = zeros(0,nAnalogChannelsInTask) ;
-                nChannelsWithStimulus = 0 ;
-            else
-                channelNamesInTask = self.AOChannelNames_(isInTaskForEachAnalogChannel) ;
-                isChannelAnalog = true(1,nAnalogChannelsInTask) ;
-%                 [aoData, nChannelsWithStimulus] = ...
-%                     stimulusMap.calculateSignals(self.StimulationSampleRate_, channelNamesInTask, isChannelAnalog, episodeIndexWithinSweep) ;  
-                [aoData, nChannelsWithStimulus] = ...
-                    self.StimulusLibrary_.calculateSignalsForMap(stimulusMapIndex, ...
-                                                                 self.StimulationSampleRate_, ...
-                                                                 channelNamesInTask, ...
-                                                                 isChannelAnalog, ...
-                                                                 episodeIndexWithinSweep) ;  
-                  % each signal of aoData is in native units
-            end
-            
-            % Want to return the number of scans in the stimulus data
-            nScans = size(aoData,1);
-            
-            % If any channel scales are problematic, deal with this
-            analogChannelScales=self.AOChannelScales_(isInTaskForEachAnalogChannel);  % (native units)/V
-            inverseAnalogChannelScales=1./analogChannelScales;  % e.g. V/(native unit)
-            sanitizedInverseAnalogChannelScales = ...
-                ws.fif(isfinite(inverseAnalogChannelScales), inverseAnalogChannelScales, zeros(size(inverseAnalogChannelScales)));            
+                % Calculate the signals
+                if isempty(stimulusMapIndex) ,
+                    aoData = zeros(0,nAnalogChannelsInTask) ;
+                    nChannelsWithStimulus = 0 ;
+                else
+                    channelNamesInTask = self.AOChannelNames_(isInTaskForEachAnalogChannel) ;
+                    isChannelAnalog = true(1,nAnalogChannelsInTask) ;
+    %                 [aoData, nChannelsWithStimulus] = ...
+    %                     stimulusMap.calculateSignals(self.StimulationSampleRate_, channelNamesInTask, isChannelAnalog, episodeIndexWithinSweep) ;  
+                    [aoData, nChannelsWithStimulus] = ...
+                        self.StimulusLibrary_.calculateSignalsForMap(stimulusMapIndex, ...
+                                                                     self.StimulationSampleRate_, ...
+                                                                     channelNamesInTask, ...
+                                                                     isChannelAnalog, ...
+                                                                     episodeIndexWithinSweep) ;  
+                      % each signal of aoData is in native units
+                end
 
-            % scale the data by the channel scales
-            if isempty(aoData) ,
-                aoDataScaled=aoData;
-            else
-                aoDataScaled=bsxfun(@times,aoData,sanitizedInverseAnalogChannelScales);
-            end
-            % all signals in aoDataScaled are in V
-            
-            % limit the data to [-10 V, +10 V]
-            aoDataScaledAndLimited=max(-10,min(aoDataScaled,+10));  % also eliminates nan, sets to +10
+                % Want to return the number of scans in the stimulus data
+                nScans = size(aoData,1);
 
-            % Finally, assign the stimulation data to the the relevant part
-            % of the output task
-            if isempty(self.TheFiniteAnalogOutputTask_) ,
-                error('Adam is dumb');
-            else
-                self.TheFiniteAnalogOutputTask_.ChannelData = aoDataScaledAndLimited;
+                % If any channel scales are problematic, deal with this
+                analogChannelScales=self.AOChannelScales_(isInTaskForEachAnalogChannel);  % (native units)/V
+                inverseAnalogChannelScales=1./analogChannelScales;  % e.g. V/(native unit)
+                sanitizedInverseAnalogChannelScales = ...
+                    ws.fif(isfinite(inverseAnalogChannelScales), inverseAnalogChannelScales, zeros(size(inverseAnalogChannelScales)));            
+
+                % scale the data by the channel scales
+                if isempty(aoData) ,
+                    aoDataScaled=aoData;
+                else
+                    aoDataScaled=bsxfun(@times,aoData,sanitizedInverseAnalogChannelScales);
+                end
+                % all signals in aoDataScaled are in V
+
+                % limit the data to [-10 V, +10 V]
+                aoDataScaledAndLimited=max(-10,min(aoDataScaled,+10));  % also eliminates nan, sets to +10
+
+                % Finally, assign the stimulation data to the the relevant part
+                % of the output task
+                if isempty(theFiniteAnalogOutputTasks_) ,
+                    error('Adam is dumb');
+                else
+                    theFiniteAnalogOutputTasks_.ChannelData = aoDataScaledAndLimited;
+                end
             end
         end  % function
 
@@ -1223,23 +1287,31 @@ classdef Refiller < handle
             % Set up the task triggering
             keystoneTask = self.StimulationKeystoneTaskCache_ ;
             if isequal(keystoneTask,'ai') ,
-                self.TheFiniteAnalogOutputTask_.TriggerTerminalName = 'ai/StartTrigger' ;
-                self.TheFiniteAnalogOutputTask_.TriggerEdge = 'rising' ;
+                for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                    self.TheFiniteAnalogOutputTasks_{ii}.TriggerTerminalName = 'ai/StartTrigger' ;
+                    self.TheFiniteAnalogOutputTasks_{ii}.TriggerEdge = 'rising' ;
+                end
                 self.TheFiniteDigitalOutputTask_.TriggerTerminalName = 'ai/StartTrigger' ;
                 self.TheFiniteDigitalOutputTask_.TriggerEdge = 'rising' ;
             elseif isequal(keystoneTask,'di') ,
-                self.TheFiniteAnalogOutputTask_.TriggerTerminalName = 'di/StartTrigger' ;
-                self.TheFiniteAnalogOutputTask_.TriggerEdge = 'rising' ;                
+                for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                    self.TheFiniteAnalogOutputTasks_{ii}.TriggerTerminalName = 'di/StartTrigger' ;
+                    self.TheFiniteAnalogOutputTasks_{ii}.TriggerEdge = 'rising' ;                
+                end
                 self.TheFiniteDigitalOutputTask_.TriggerTerminalName = 'di/StartTrigger' ;
                 self.TheFiniteDigitalOutputTask_.TriggerEdge = 'rising' ;
             elseif isequal(keystoneTask,'ao') ,
-                self.TheFiniteAnalogOutputTask_.TriggerTerminalName = sprintf('PFI%d',self.StimulationTrigger_.PFIID) ;
-                self.TheFiniteAnalogOutputTask_.TriggerEdge = self.StimulationTrigger_.Edge ;
+                for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                    self.TheFiniteAnalogOutputTasks_{ii}.TriggerTerminalName = sprintf('PFI%d',self.StimulationTrigger_.PFIID) ;
+                    self.TheFiniteAnalogOutputTasks_{ii}.TriggerEdge = self.StimulationTrigger_.Edge ;
+                end
                 self.TheFiniteDigitalOutputTask_.TriggerTerminalName = 'ao/StartTrigger' ;
                 self.TheFiniteDigitalOutputTask_.TriggerEdge = 'rising' ;
             elseif isequal(keystoneTask,'do') ,
-                self.TheFiniteAnalogOutputTask_.TriggerTerminalName = 'do/StartTrigger' ;
-                self.TheFiniteAnalogOutputTask_.TriggerEdge = 'rising' ;                
+                for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                    self.TheFiniteAnalogOutputTasks_{ii}.TriggerTerminalName = 'do/StartTrigger' ;
+                    self.TheFiniteAnalogOutputTasks_{ii}.TriggerEdge = 'rising' ;                
+                end
                 self.TheFiniteDigitalOutputTask_.TriggerTerminalName = sprintf('PFI%d',self.StimulationTrigger_.PFIID) ;
                 self.TheFiniteDigitalOutputTask_.TriggerEdge = self.StimulationTrigger_.Edge ;
             else
@@ -1249,11 +1321,17 @@ classdef Refiller < handle
             end
             
             % Clear out any pre-existing output waveforms
-            self.TheFiniteAnalogOutputTask_.clearChannelData() ;
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.clearChannelData() ;
+            end
+            
             self.TheFiniteDigitalOutputTask_.clearChannelData() ;
 
             % Arm the tasks
-            self.TheFiniteAnalogOutputTask_.arm() ;
+            for ii = 1:numel(self.TheFiniteAnalogOutputTasks_)
+                self.TheFiniteAnalogOutputTasks_{ii}.arm() ;
+            end
+            
             self.TheFiniteDigitalOutputTask_.arm() ;
             
 %             % Set up the selected outputable cache
@@ -1274,6 +1352,7 @@ classdef Refiller < handle
 
             self.AOChannelNames_ = protocol.AOChannelNames ;
             self.AOChannelScales_ = protocol.AOChannelScales ;
+            self.AODeviceNames_ = protocol.AODeviceNames ;
             self.AOTerminalIDs_ = protocol.AOTerminalIDs ;
             
             self.DOChannelNames_ = protocol.DOChannelNames ;
@@ -1291,20 +1370,21 @@ classdef Refiller < handle
         end  % method       
         
         function acquireHardwareResourcesStimulation_(self)
-            if isempty(self.TheFiniteAnalogOutputTask_) ,
-                deviceNameForEachAOChannel = repmat({self.DeviceName_}, size(self.AOChannelNames_)) ;
+            if isempty(self.TheFiniteAnalogOutputTasks_) ,
+                deviceNameForEachAOChannel = self.AODeviceNames_;
                 isTerminalOvercommittedForEachAOChannel = self.IsAOChannelTerminalOvercommitted_ ;
                 isInTaskForEachAOChannel = ~isTerminalOvercommittedForEachAOChannel ;
                 deviceNameForEachChannelInAOTask = deviceNameForEachAOChannel(isInTaskForEachAOChannel) ;
                 terminalIDForEachChannelInAOTask = self.AOTerminalIDs_(isInTaskForEachAOChannel) ;                
-                self.TheFiniteAnalogOutputTask_ = ...
+                self.TheFiniteAnalogOutputTasks_ = cellfun(@(deviceName) ...
                     ws.FiniteOutputTask('analog', ...
-                                        'WaveSurfer Finite Analog Output Task', ...
-                                        deviceNameForEachChannelInAOTask, ...
-                                        terminalIDForEachChannelInAOTask, ...
+                                        sprintf('WaveSurfer Finite Analog Output Task for Device %s', deviceName), ...
+                                        repmat({deviceName},1,sum(strcmpi(deviceName,deviceNameForEachChannelInAOTask))), ...
+                                        terminalIDForEachChannelInAOTask(strcmpi(deviceName,deviceNameForEachChannelInAOTask)), ...
                                         isInTaskForEachAOChannel, ...
-                                        self.StimulationSampleRate_) ;
-                %self.TheFiniteAnalogOutputTask_.SampleRate = self.SampleRate ;
+                                        self.StimulationSampleRate_), ...
+                    unique(deviceNameForEachChannelInAOTask),'UniformOutput',false);
+                %self.TheFiniteAnalogOutputTasks_.SampleRate = self.SampleRate ;
                 %self.IsInTaskForEachAOChannel_ = isInTaskForEachAOChannel ;
             end
             if isempty(self.TheFiniteDigitalOutputTask_) ,

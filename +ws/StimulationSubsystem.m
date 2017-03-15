@@ -41,7 +41,7 @@ classdef (Abstract) StimulationSubsystem < ws.Subsystem   % & ws.DependentProper
     
     properties (Access = protected)
         SampleRate_ = 20000  % Hz
-        %AnalogDeviceNames_ = cell(1,0)
+        AnalogDeviceNames_ = cell(1,0)
         %DigitalDeviceNames_ = cell(1,0)        
         %AnalogTerminalNames_ = cell(1,0)  % the physical channel name for each analog channel
         %DigitalTerminalNames_ = cell(1,0)  % the physical channel name for each digital channel
@@ -239,9 +239,9 @@ classdef (Abstract) StimulationSubsystem < ws.Subsystem   % & ws.DependentProper
 %         end
         
         function out = get.AnalogDeviceNames(self)
-            %out = self.AnalogDeviceNames_ ;
-            deviceName = self.Parent.DeviceName ;
-            out = repmat({deviceName}, size(self.AnalogChannelNames)) ;             
+            out = self.AnalogDeviceNames_ ;
+%             deviceName = self.Parent.DeviceName ;
+%             out = repmat({deviceName}, size(self.AnalogChannelNames)) ;             
         end  % function
         
         function digitalDeviceNames = get.DigitalDeviceNames(self)
@@ -513,16 +513,16 @@ classdef (Abstract) StimulationSubsystem < ws.Subsystem   % & ws.DependentProper
         end  % function       
         
         function newChannelName = addAnalogChannel(self)
-            %deviceName = self.Parent.DeviceName ;
+            deviceName = self.Parent.DeviceName ;
             
-            %newChannelDeviceName = deviceName ;
+            newChannelDeviceName = deviceName ;
             newTerminalID = ws.fif(isempty(self.AnalogTerminalIDs), ...
                                           0, ...
                                           max(self.AnalogTerminalIDs)+1) ;
             newChannelPhysicalName = sprintf('AO%d',newTerminalID) ;
             newChannelName = newChannelPhysicalName ;
             
-            %self.AnalogDeviceNames_ = [self.AnalogDeviceNames_ {newChannelDeviceName} ] ;
+            self.AnalogDeviceNames_ = [self.AnalogDeviceNames_ {newChannelDeviceName} ] ;
             self.AnalogTerminalIDs_ = [self.AnalogTerminalIDs_ newTerminalID] ;
             %self.AnalogTerminalNames_ =  [self.AnalogTerminalNames_ {newChannelPhysicalName}] ;
             self.AnalogChannelNames_ = [self.AnalogChannelNames_ {newChannelName}] ;
@@ -545,7 +545,7 @@ classdef (Abstract) StimulationSubsystem < ws.Subsystem   % & ws.DependentProper
             %channelNamesToDelete = self.AnalogChannelNames_(isToBeDeleted) ;
             if all(isToBeDeleted)
                 % Want everything to still be a row vector
-                %self.AnalogDeviceNames_ = cell(1,0) ;
+                self.AnalogDeviceNames_ = cell(1,0) ;
                 self.AnalogTerminalIDs_ = zeros(1,0) ;
                 self.AnalogChannelNames_ = cell(1,0) ;
                 self.AnalogChannelScales_ = zeros(1,0) ;
@@ -553,7 +553,7 @@ classdef (Abstract) StimulationSubsystem < ws.Subsystem   % & ws.DependentProper
                 self.IsAnalogChannelMarkedForDeletion_ = false(1,0) ;
             else
                 isKeeper = ~isToBeDeleted ;
-                %self.AnalogDeviceNames_ = self.AnalogDeviceNames_(isKeeper) ;
+                self.AnalogDeviceNames_ = self.AnalogDeviceNames_(isKeeper) ;
                 self.AnalogTerminalIDs_ = self.AnalogTerminalIDs_(isKeeper) ;
                 self.AnalogChannelNames_ = self.AnalogChannelNames_(isKeeper) ;
                 self.AnalogChannelScales_ = self.AnalogChannelScales_(isKeeper) ;
@@ -588,6 +588,13 @@ classdef (Abstract) StimulationSubsystem < ws.Subsystem   % & ws.DependentProper
             self.DigitalChannelNames_{i} = newValue ;
             self.StimulusLibrary_.renameChannel(oldValue, newValue) ;
             %self.Parent.didSetDigitalOutputChannelName(didSucceed,oldValue,newValue);
+        end
+        
+        function setSingleAnalogDeviceName(self, i, newValue)
+            if 1<=i && i<=self.NAnalogChannels && ws.isString(newValue) && ~isempty(newValue) && ismember(newValue,self.Parent.AllDeviceNames) ,
+                self.AnalogDeviceNames_{i} = newValue ;
+            end
+            self.Parent.didSetAnalogOutputDeviceName();
         end
         
         function setSingleAnalogTerminalID(self, i, newValue)
@@ -755,7 +762,7 @@ end  % methods block
             % the length of AnalogChannelNames_ is the "true" number of AI
             % channels
             nAOChannels = length(self.AnalogChannelNames_) ;
-            %self.AnalogDeviceNames_ = ws.sanitizeRowVectorLength(self.AnalogDeviceNames_, nAOChannels, {''}) ;
+            self.AnalogDeviceNames_ = ws.sanitizeRowVectorLength(self.AnalogDeviceNames_, nAOChannels, {''}) ;
             self.AnalogTerminalIDs_ = ws.sanitizeRowVectorLength(self.AnalogTerminalIDs_, nAOChannels, 0) ;
             self.AnalogChannelScales_ = ws.sanitizeRowVectorLength(self.AnalogChannelScales_, nAOChannels, 1) ;
             self.AnalogChannelUnits_ = ws.sanitizeRowVectorLength(self.AnalogChannelUnits_, nAOChannels, {'V'}) ;

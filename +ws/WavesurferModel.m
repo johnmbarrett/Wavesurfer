@@ -3295,6 +3295,7 @@ classdef WavesurferModel < ws.Model
 
             refillerProtocol.AOChannelNames = self.Stimulation.AnalogChannelNames ;
             refillerProtocol.AOChannelScales = self.Stimulation.AnalogChannelScales ;
+            refillerProtocol.AODeviceNames = self.Stimulation.AnalogDeviceNames ;
             refillerProtocol.AOTerminalIDs = self.Stimulation.AnalogTerminalIDs ;
             
             refillerProtocol.DOChannelNames = self.Stimulation.DigitalChannelNames ;
