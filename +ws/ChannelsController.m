@@ -101,6 +101,14 @@ classdef ChannelsController < ws.Controller
             self.Model.Stimulation.do('setSingleAnalogChannelName', i, newString) ;
         end
         
+        function AODeviceNamePopupsActuated(self,source,event) %#ok<INUSD>
+            deviceName=ws.getPopupMenuSelection(source,self.Model.AllDeviceNames);
+            isTheChannel = (source==self.Figure.AODeviceNamePopups) ;
+            iChannel = find(isTheChannel) ;
+            %self.Model.Acquisition.setSingleAnalogTerminalID(iChannel, terminalID) ;  %#ok<FNDSB>
+            self.Model.Stimulation.do('setSingleAnalogDeviceName', iChannel, deviceName) ;  %#ok<FNDSB>
+        end
+        
         function AOTerminalNamePopupsActuated(self,source,event) %#ok<INUSD>
             % Get the list of valid choices, if we can
             wavesurferModel = self.Model ;

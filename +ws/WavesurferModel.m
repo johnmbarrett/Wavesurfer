@@ -816,6 +816,11 @@ classdef WavesurferModel < ws.Model
             self.broadcast('UpdateChannels') ;
         end
         
+        function didSetAnalogOutputDeviceName(self)
+            self.syncIsAOChannelTerminalOvercommitted_() ;
+            self.broadcast('UpdateChannels') ;
+        end
+        
         function didSetAnalogOutputTerminalID(self)
             self.syncIsAOChannelTerminalOvercommitted_() ;
             self.broadcast('UpdateChannels') ;
@@ -3487,7 +3492,7 @@ classdef WavesurferModel < ws.Model
 %             aiTerminalIDsOnDevice = self.AITerminalIDsOnDevice ; % TODO : for each device????
             %nAITerminalsOnDevice = self.NAITerminals ;            
             %self.IsAIChannelTerminalOvercommitted_ = (nOccurancesOfAITerminal>1) | (aiTerminalIDForEachChannel>=nAITerminalsOnDevice) ;            
-            self.IsAIChannelTerminalOvercommitted_ = (nOccurancesOfAITerminal>1); % | ~ismember(aiTerminalIDForEachChannel,aiTerminalIDsOnDevice) ;
+            self.IsAIChannelTerminalOvercommitted_ = (nOccurancesOfAITerminal>1); % | ~ismember(aiTerminalIDForEachChannel,aiTerminalIDsOnDevice) ; TODO : second condition on per-device basis
         end
         
         function syncIsAOChannelTerminalOvercommitted_(self)            
@@ -3500,9 +3505,9 @@ classdef WavesurferModel < ws.Model
             
             % For AO terminals
             aoTerminalIDs = self.Stimulation.AnalogTerminalIDs ;
-            nOccurancesOfAOTerminal = ws.nOccurancesOfID(aoTerminalIDs) ;
-            nAOTerminals = self.NAOTerminals ;
-            self.IsAOChannelTerminalOvercommitted_ = (nOccurancesOfAOTerminal>1) | (aoTerminalIDs>=nAOTerminals) ;            
+            nOccurancesOfAOTerminal = ws.nOccurancesOfDeviceNameAndID(self.Stimulation.AnalogDeviceNames,aoTerminalIDs) ;
+%             nAOTerminals = self.NAOTerminals ;
+            self.IsAOChannelTerminalOvercommitted_ = (nOccurancesOfAOTerminal>1); % | (aoTerminalIDs>=nAOTerminals) ; TODO : second condition on per-device basis 
         end
         
     end  % protected methods block
